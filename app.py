@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 st.set_page_config(page_title="QuLab", layout="wide")
 st.sidebar.image("https://www.quantuniversity.com/assets/img/logo5.jpg")
@@ -8,14 +9,10 @@ st.title("QuLab")
 st.divider()
 
 st.markdown(
-    """
-In this lab, you will explore and simulate your AI-Readiness Score (AI-R) using a structured, data-driven framework that blends individual capability with market opportunity and alignment.
-
-AI-Readiness decomposes into three core parts: Idiosyncratic Readiness ($V^R$), Systematic Opportunity ($H^R$), and a Synergy component that rewards alignment between your skills and market needs. The overall score is computed as:
-"""
-    .strip()
+    "In this lab, you will explore and simulate your AI-Readiness Score (AI-R) using a structured, data-driven framework that blends individual capability with market opportunity and alignment.\n\n"
+    "AI-Readiness decomposes into three core parts: Idiosyncratic Readiness ($V^R$), Systematic Opportunity ($H^R$), and a Synergy component that rewards alignment between your skills and market needs."
 )
-st.latex(r" AI\\text{-}R_{i,t} = \\alpha \\, V^R_i(t) + (1-\\alpha) \\, H^R_i(t) + \\beta \\, \\text{Synergy}\\% ")
+st.latex(r" AI\text{-}R_{i,t} = \alpha\, V^R_i(t) + (1-\alpha)\, H^R_i(t) + \beta\, \text{Synergy}\% ")
 st.markdown(
     "- $V^R$: Your individual readiness based on AI-Fluency, Domain-Expertise, and Adaptive-Capacity.\n"
     "- $H^R$: The market opportunity for your selected occupation, combining AI enhancement, job growth, wage premium, and entry accessibility adjusted by growth and regional multipliers.\n"
@@ -25,7 +22,6 @@ st.markdown(
 
 
 def _init_state():
-    """Initialize session state with synthetic data and defaults."""
     if "initialized" in st.session_state:
         return
 
