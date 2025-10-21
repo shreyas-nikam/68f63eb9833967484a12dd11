@@ -1,105 +1,141 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from .utils import (
-    normalize_to_100,
+from application_pages.core import (
+    compute_all_scores,
     simulate_pathway_impact,
-    calculate_idiosyncratic_readiness,
-    calculate_ai_readiness_score,
-    calculate_synergy_percentage,
 )
 
+
+def _get_selected_occupation_row(occupation_name):
+    df = st.session_state.occupational_data_df
+    row = df[df['occupation_name'] == occupation_name]
+    if row.empty:
+        return df.iloc[0]
+    return row.iloc[0]
+
+
 def run_page3():
-    st.header("Pathway Simulator & What-If Analysis")
+    st.subheader("Pathway Simulation")
+    st.markdown("Simulate how a learning pathway may change your $V^R$, Synergy, and overall AI-Readiness.")
 
-    if not st.session_state.get("calculated", False):
-        st.warning("Please calculate your current AI-Readiness on the previous page first.")
-        return
+    if st.session_state.get('current_scores', None) is None:
+        st.info("Tip: Compute your baseline first on 'Overview & Inputs'. You can still simulate now; we will derive baseline from current inputs.")
 
-    lp_df = st.session_state["learning_pathways_df"].copy()
+    # Select pathway
+    lp_df = st.session_state.learning_pathways_df
+    pathway_name = st.selectbox("Select Learning Pathway", options=list(lp_df['pathway_name'].values), index=0)
+    pathway_row = lp_df[lp_df['pathway_name'] == pathway_name].iloc[0]
+    completion_score = st.slider("Pathway Completion Score", 0.0, 1.0, 1.0, 0.05, help="Simulate completion extent.")
+    mastery_score = st.slider("Pathway Mastery Score", 0.0, 1.0, 1.0, 0.05, help="Simulate mastery depth.")
 
-    # Current baselines
-    vr_score = float(st.session_state.get("vr_score", 0.0))
-    hr_score = float(st.session_state.get("hr_score", 0.0))
-    synergy_pct = float(st.session_state.get("synergy_pct", 0.0))
-    ai_r = float(st.session_state.get("ai_r", 0.0))
+    # Build current input dict from session for baseline
+    occ_row = _get_selected_occupation_row(st.session_state.selected_occupation_name)
+    required_skills_df = st.session_state.occupation_required_skills_df[
+        st.session_state.occupation_required_skills_df['occupation_name'] == st.session_state.selected_occupation_name
+    ][['skill_name', 'required_skill_score', 'skill_importance']]
 
-    ai_fluency = float(st.session_state.get("ai_fluency_val", 0.0))
-    domain_expertise = float(st.session_state.get("domain_expertise_val", 0.0))
-    adaptive_capacity = float(st.session_state.get("adaptive_capacity_val", 0.0))
+    base_inputs = {
+        'prompting_score': st.session_state.prompting_score,
+        'tools_score': st.session_state.tools_score,
+        'understanding_score': st.session_state.understanding_score,
+        'datalit_score': st.session_state.datalit_score,
+        'output_quality_with_ai': st.session_state.output_quality_with_ai,
+        'output_quality_without_ai': st.session_state.output_quality_without_ai,
+        'time_without_ai': st.session_state.time_without_ai,
+        'time_with_ai': st.session_state.time_with_ai,
+        'errors_caught': st.session_state.errors_caught,
+        'total_ai_errors': st.session_state.total_ai_errors,
+        'appropriate_trust_decisions': st.session_state.appropriate_trust_decisions,
+        'total_decisions': st.session_state.total_decisions,
+        'delta_proficiency': st.session_state.delta_proficiency,
+        'delta_t_hours_invested': st.session_state.delta_t_hours_invested,
+        'education_level': st.session_state.education_level,
+        'years_experience': st.session_state.years_experience,
+        'portfolio_score': st.session_state.portfolio_score,
+        'recognition_score': st.session_state.recognition_score,
+        'credentials_score': st.session_state.credentials_score,
+        'cognitive_flexibility': st.session_state.cognitive_flexibility,
+        'social_emotional_intelligence': st.session_state.social_emotional_intelligence,
+        'strategic_career_management': st.session_state.strategic_career_management,
+        'occupation_row': occ_row,
+        'lambda_val': st.session_state.lambda_val,
+        'gamma_val': st.session_state.gamma_val,
+        'individual_skills_df': st.session_state.individual_skills_df.copy(),
+        'required_skills_df': required_skills_df.copy(),
+        'max_possible_match': st.session_state.max_possible_match,
+        'alpha': st.session_state.alpha_weight,
+        'beta': st.session_state.beta_weight,
+    }
 
-    alpha = float(st.session_state.get("alpha", 0.6))
-    beta = float(st.session_state.get("beta", 0.15))
-
-    st.subheader("Current Scores")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("V^R", f"{vr_score:.1f}")
-    c2.metric("H^R", f"{hr_score:.1f}")
-    c3.metric("Synergy%", f"{synergy_pct:.1f}")
-    c4.metric("AI-R", f"{ai_r:.1f}")
-
-    st.markdown("---")
-    st.subheader("Select Learning Pathway")
-    pathway_name = st.selectbox("Select Learning Pathway", options=list(lp_df["pathway_name"].values), index=0)
-    path_row = lp_df[lp_df["pathway_name"] == pathway_name].iloc[0]
-
-    completion_score = st.slider("Pathway Completion Score", 0.0, 1.0, 1.0, 0.05)
-    mastery_score = st.slider("Pathway Mastery Score", 0.0, 1.0, 1.0, 0.05, help="Simulate the impact of completing a learning pathway with a certain completion and mastery level.")
-
-    if st.button("Simulate Pathway Impact"):
-        new_ai_fluency, new_domain_expertise, new_adaptive_capacity = simulate_pathway_impact(
-            ai_fluency, domain_expertise, adaptive_capacity,
-            float(path_row["impact_ai_fluency"]), float(path_row["impact_domain_expertise"]), float(path_row["impact_adaptive_capacity"]),
-            completion_score=completion_score, mastery_score=mastery_score
-        )
-
-        # Recompute V^R
-        new_vr_raw = calculate_idiosyncratic_readiness(new_ai_fluency, new_domain_expertise, new_adaptive_capacity)
-        new_vr_score = normalize_to_100(new_vr_raw)
-
-        # Assume H^R unchanged by learning pathway in short-run
-        new_hr_score = hr_score
-
-        # Recompute Synergy (alignment presumed unchanged; synergy scales with V^R change)
-        # For stability, scale synergy by ratio of new V^R to old V^R
-        if vr_score <= 0:
-            new_synergy_pct = synergy_pct
-        else:
-            ratio = new_vr_score / vr_score
-            new_synergy_pct = min(100.0, synergy_pct * ratio)
-
-        new_ai_r = calculate_ai_readiness_score(new_vr_score, new_hr_score, new_synergy_pct, alpha, beta)
-        new_ai_r = min(100.0, max(0.0, new_ai_r))
-
-        st.session_state.update({
-            "new_ai_fluency": new_ai_fluency,
-            "new_domain_expertise": new_domain_expertise,
-            "new_adaptive_capacity": new_adaptive_capacity,
-            "new_vr_score": new_vr_score,
-            "new_hr_score": new_hr_score,
-            "new_synergy_pct": new_synergy_pct,
-            "new_ai_r": new_ai_r,
-            "simulation_done": True,
-        })
-
-    if st.session_state.get("simulation_done", False):
-        st.subheader("Projected Scores")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("V^R (new)", f"{st.session_state['new_vr_score']:.1f}", delta=f"{st.session_state['new_vr_score'] - vr_score:.1f}")
-        c2.metric("H^R (new)", f"{st.session_state['new_hr_score']:.1f}", delta=f"{st.session_state['new_hr_score'] - hr_score:.1f}")
-        c3.metric("Synergy% (new)", f"{st.session_state['new_synergy_pct']:.1f}", delta=f"{st.session_state['new_synergy_pct'] - synergy_pct:.1f}")
-        c4.metric("AI-R (new)", f"{st.session_state['new_ai_r']:.1f}", delta=f"{st.session_state['new_ai_r'] - ai_r:.1f}")
-
-        # Comparison chart
-        comp_df = pd.DataFrame({
-            "Metric": ["V^R", "H^R", "AI-R"],
-            "Current": [vr_score, hr_score, ai_r],
-            "Projected": [st.session_state['new_vr_score'], st.session_state['new_hr_score'], st.session_state['new_ai_r']]
-        })
-        comp_df = comp_df.melt(id_vars=["Metric"], var_name="State", value_name="Score")
-        fig = px.bar(comp_df, x="Metric", y="Score", color="State", barmode="group", title="Current vs. Projected Scores")
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.info("Interpretation: Increases in AI-Fluency, Domain-Expertise, or Adaptive-Capacity lift $V^R$ and may raise overall $AI\text{-}R$ even if market opportunity ($H^R$) remains unchanged in the short run.")
+    # Baseline scores (use existing if available)
+    if st.session_state.get('current_scores', None) is not None:
+        baseline = st.session_state.current_scores
     else:
-        st.info("Configure pathway inputs and click 'Simulate Pathway Impact' to see projected changes.")
+        baseline = compute_all_scores(base_inputs)
+
+    # Current VR components (0..1)
+    current_ai_fluency = baseline['vr_breakdown']['AI-Fluency (01)']
+    current_domain_expertise = baseline['vr_breakdown']['Domain-Expertise (01)']
+    current_adaptive_capacity = baseline['vr_breakdown']['Adaptive-Capacity (01)']
+
+    # Apply simulation
+    sim_ai_fluency, sim_domain_expertise, sim_adaptive_capacity = simulate_pathway_impact(
+        current_ai_fluency,
+        current_domain_expertise,
+        current_adaptive_capacity,
+        pathway_row['impact_ai_fluency'],
+        pathway_row['impact_domain_expertise'],
+        pathway_row['impact_adaptive_capacity'],
+        completion_score=completion_score,
+        mastery_score=mastery_score,
+    )
+
+    # Compute base HR and alignment (use base_inputs)
+    base_results = compute_all_scores(base_inputs)
+
+    # Rebuild simulated VR score from new components
+    vr_new_01 = max(0.0, min(1.0, 0.45 * float(sim_ai_fluency) + 0.35 * float(sim_domain_expertise) + 0.20 * float(sim_adaptive_capacity)))
+    vr_new_100 = vr_new_01 * 100.0
+
+    # HR and alignment from base_results
+    hr_100 = base_results['hr_score']
+    alignment = base_results['alignment']
+
+    # Recompute synergy with new VR
+    synergy_new = (vr_new_100 * hr_100 * alignment) / 100.0
+    synergy_new = max(0.0, min(100.0, synergy_new))
+
+    # AI-R new
+    ai_r_new = st.session_state.alpha_weight * vr_new_100 + (1.0 - st.session_state.alpha_weight) * hr_100 + st.session_state.beta_weight * synergy_new
+
+    # Display current vs projected
+    st.markdown("Current vs. Projected after pathway simulation")
+    comp_df = pd.DataFrame({
+        'Metric': ['V^R', 'H^R', 'Synergy%', 'AI-R'],
+        'Current': [baseline['vr_score'], baseline['hr_score'], baseline['synergy_pct'], baseline['ai_r']],
+        'Projected': [vr_new_100, hr_100, synergy_new, ai_r_new],
+    })
+    fig_comp = px.bar(comp_df.melt(id_vars='Metric', value_vars=['Current', 'Projected'], var_name='State', value_name='Score'),
+                      x='Metric', y='Score', color='State', barmode='group', title='Comparison: Current vs. Projected Scores')
+    st.plotly_chart(fig_comp, use_container_width=True)
+
+    st.markdown("Projected component values")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("V^R (new)", f"{vr_new_100:.1f}")
+    c2.metric("H^R (unchanged)", f"{hr_100:.1f}")
+    c3.metric("Synergy % (new)", f"{synergy_new:.1f}")
+    c4.metric("AI-R (new)", f"{ai_r_new:.1f}")
+
+    with st.expander("Pathway parameters and impacts"):
+        st.write({
+            'pathway_name': pathway_name,
+            'completion_score': float(completion_score),
+            'mastery_score': float(mastery_score),
+            'impact_ai_fluency': float(pathway_row['impact_ai_fluency']),
+            'impact_domain_expertise': float(pathway_row['impact_domain_expertise']),
+            'impact_adaptive_capacity': float(pathway_row['impact_adaptive_capacity']),
+            'sim_ai_fluency (01)': float(sim_ai_fluency),
+            'sim_domain_expertise (01)': float(sim_domain_expertise),
+            'sim_adaptive_capacity (01)': float(sim_adaptive_capacity),
+        })
