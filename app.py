@@ -8,23 +8,27 @@ st.title("QuLab")
 st.divider()
 
 st.markdown(
-    "In this lab, you will explore and simulate your AI-Readiness Score (AI-R) using a structured, data-driven framework that blends individual capability with market opportunity and alignment. "
-    "The AI-Readiness framework decomposes into: (1) Idiosyncratic Readiness ($V^R$), (2) Systematic Opportunity ($H^R$), and (3) a Synergy component that rewards alignment between your skills and market needs."
+    """
+In this lab, you will explore and simulate your AI-Readiness Score (AI-R) using a structured, data-driven framework that blends individual capability with market opportunity and alignment.
+
+AI-Readiness decomposes into three core parts: Idiosyncratic Readiness ($V^R$), Systematic Opportunity ($H^R$), and a Synergy component that rewards alignment between your skills and market needs. The overall score is computed as:
+"""
+    .strip()
 )
-st.latex(r" AI\text{-}R_{i,t} = \alpha\, V^R_i(t) + (1-\alpha)\, H^R_i(t) + \beta\, \text{Synergy}\% ")
+st.latex(r" AI\\text{-}R_{i,t} = \\alpha \\, V^R_i(t) + (1-\\alpha) \\, H^R_i(t) + \\beta \\, \\text{Synergy}\\% ")
 st.markdown(
-    "- $V^R$: Individual readiness via AI-Fluency, Domain-Expertise, and Adaptive-Capacity.\n"
-    "- $H^R$: Market opportunity for the selected occupation (AI enhancement, job growth, wage premium, entry accessibility) scaled by growth and regional multipliers.\n"
-    "- $\alpha \in [0,1]$: Weight on individual vs. market factors.\n"
-    "- $\beta \in [0,1]$: Weight on the synergy term (alignment of skills and timing).\n"
+    "- $V^R$: Your individual readiness based on AI-Fluency, Domain-Expertise, and Adaptive-Capacity.\n"
+    "- $H^R$: The market opportunity for your selected occupation, combining AI enhancement, job growth, wage premium, and entry accessibility adjusted by growth and regional multipliers.\n"
+    "- $\\alpha \\in [0,1]$: Weight on individual vs. market factors.\n"
+    "- $\\beta \\in [0,1]$: Weight on the synergy term, which increases when your skills align with role requirements at the right time.\n"
 )
 
 
 def _init_state():
+    """Initialize session state with synthetic data and defaults."""
     if "initialized" in st.session_state:
         return
 
-    # Synthetic DataFrames (lightweight, for full interactivity)
     individual_profiles_data = {
         'user_id': [1], 'prompting_score': [0.75], 'tools_score': [0.6],
         'understanding_score': [0.8], 'datalit_score': [0.9],
@@ -83,28 +87,24 @@ def _init_state():
     st.session_state.selected_occupation_name = 'Data Analyst with AI Skills'
     st.session_state.max_possible_match = 100.0
     st.session_state.current_scores = None
-    st.session_state.simulation_results = None
-
     st.session_state.initialized = True
 
 
 _init_state()
 
-# Sidebar global controls for Navigation and Global Parameters
 page = st.sidebar.selectbox(label="Navigation", options=["Overview & Inputs", "Scores & Insights", "Pathway Simulation"])
 st.sidebar.subheader("Global Parameters")
 st.sidebar.slider(
-    "Weight on Individual Factors (\u03B1)", min_value=0.0, max_value=1.0, value=0.6, step=0.01,
+    "Weight on Individual Factors (\\u03B1)", min_value=0.0, max_value=1.0, value=0.6, step=0.01,
     help="Weight allocated to individual readiness ($V^R$) vs. market opportunity ($H^R$) in the overall AI-Readiness Score.",
     key="alpha_weight",
 )
 st.sidebar.slider(
-    "Synergy Coefficient (\u03B2)", min_value=0.0, max_value=1.0, value=0.15, step=0.01,
+    "Synergy Coefficient (\\u03B2)", min_value=0.0, max_value=1.0, value=0.15, step=0.01,
     help="Coefficient for the Synergy component, amplifying the AI-Readiness Score when individual readiness aligns with market opportunity.",
     key="beta_weight",
 )
 
-# Route to pages
 if page == "Overview & Inputs":
     from application_pages.page1 import run_page1
     run_page1()
