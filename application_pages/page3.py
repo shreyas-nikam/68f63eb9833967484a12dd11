@@ -15,7 +15,6 @@ def _get_selected_occupation_row(occupation_name):
 def run_page3():
     st.subheader("Pathway Simulation")
     st.markdown("Explore how completing a learning pathway could change your $V^R$, Synergy, and overall AI-Readiness.")
-    st.latex(r" AI\text{-}R_{i,t} = \alpha\, V^R_i(t) + (1-\alpha)\, H^R_i(t) + \beta\, \text{Synergy}\% ")
 
     if st.session_state.get('current_scores', None) is None:
         st.info("Tip: Compute your baseline first on 'Overview & Inputs'. You can still simulate now; the baseline will be derived from current inputs.")
@@ -28,7 +27,7 @@ def run_page3():
     completion_score = st.slider("Pathway Completion Score", 0.0, 1.0, 1.0, 0.05, help="Simulate completion extent.")
     mastery_score = st.slider("Pathway Mastery Score", 0.0, 1.0, 1.0, 0.05, help="Simulate mastery depth.")
 
-    # Build current input dict from session for baseline
+    # Build baseline inputs from session
     occ_row = _get_selected_occupation_row(st.session_state.selected_occupation_name)
     required_skills_df = st.session_state.occupation_required_skills_df[
         st.session_state.occupation_required_skills_df['occupation_name'] == st.session_state.selected_occupation_name
@@ -67,18 +66,17 @@ def run_page3():
         'beta': st.session_state.beta_weight,
     }
 
-    # Baseline scores (use existing if available)
-    if st.session_state.get('current_scores', None) is not None:
-        baseline = st.session_state.current_scores
-    else:
+    # Baseline scores (reuse if available)
+    baseline = st.session_state.get('current_scores', None)
+    if baseline is None:
         baseline = compute_all_scores(base_inputs)
 
-    # Current VR components (0..1)
+    # Current VR component levels (0..1)
     current_ai_fluency = baseline['vr_breakdown']['AI-Fluency (01)']
     current_domain_expertise = baseline['vr_breakdown']['Domain-Expertise (01)']
     current_adaptive_capacity = baseline['vr_breakdown']['Adaptive-Capacity (01)']
 
-    # Apply simulation
+    # Apply pathway impacts
     sim_ai_fluency, sim_domain_expertise, sim_adaptive_capacity = simulate_pathway_impact(
         current_ai_fluency,
         current_domain_expertise,
@@ -90,25 +88,23 @@ def run_page3():
         mastery_score=mastery_score,
     )
 
-    # Compute base HR and alignment (use base_inputs)
+    # Compute HR and alignment from baseline inputs
     base_results = compute_all_scores(base_inputs)
 
-    # Rebuild simulated VR score from new components
+    # Rebuild simulated V^R
     vr_new_01 = max(0.0, min(1.0, 0.45 * float(sim_ai_fluency) + 0.35 * float(sim_domain_expertise) + 0.20 * float(sim_adaptive_capacity)))
     vr_new_100 = vr_new_01 * 100.0
 
-    # HR and alignment from base_results
+    # Keep HR and alignment from base
     hr_100 = base_results['hr_score']
     alignment = base_results['alignment']
 
-    # Recompute synergy with new VR
+    # New synergy and AI-R
     synergy_new = (vr_new_100 * hr_100 * alignment) / 100.0
     synergy_new = max(0.0, min(100.0, synergy_new))
-
-    # AI-R new
     ai_r_new = st.session_state.alpha_weight * vr_new_100 + (1.0 - st.session_state.alpha_weight) * hr_100 + st.session_state.beta_weight * synergy_new
 
-    # Display current vs projected
+    # Comparison chart
     st.markdown("Current vs. Projected after pathway simulation")
     comp_df = pd.DataFrame({
         'Metric': ['V^R', 'H^R', 'Synergy%', 'AI-R'],
@@ -121,6 +117,7 @@ def run_page3():
     )
     st.plotly_chart(fig_comp, use_container_width=True)
 
+    # KPI tiles
     st.markdown("Projected component values")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("V^R (new)", f"{vr_new_100:.1f}")
