@@ -1,59 +1,116 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-from application_pages.utils import init_data
 
 st.set_page_config(page_title="QuLab", layout="wide")
 st.sidebar.image("https://www.quantuniversity.com/assets/img/logo5.jpg")
 st.sidebar.divider()
 st.title("QuLab")
 st.divider()
+
 st.markdown(
-    "In this lab, we build an interactive AI Career Navigator & Pathway Planner to compute an AI-Readiness score (AI-R) for individuals and explore career transitions. "
-    "The AI-R framework blends Idiosyncratic Readiness ($V^R$), Systematic Opportunity ($H^R$), and a Synergy component to reflect the alignment between a person’s skills and market demand. "
-    "You can: (1) adjust inputs for your skills and experience, (2) select occupations to see market opportunity, and (3) simulate learning pathways to project future AI-R.\n\n" 
-    "Business logic summary:\n"
-    "- $AI\text{-}R_{i,t} = \alpha\,V^R + (1-\alpha)\,H^R + \beta\,\text{Synergy}\%$\n"
-    "- $V^R$ aggregates AI-Fluency, Domain-Expertise, and Adaptive-Capacity.\n"
-    "- $H^R$ accounts for AI-enhancement, job growth, wage premium, and entry accessibility, adjusted by growth and regional multipliers.\n"
-    "- Synergy% scales with how well your skills match occupation requirements and timing (experience).\n"
-    "All quantities are normalized to the $[0, 100]$ scale where applicable; error handling avoids division-by-zero and provides guidance in the UI."
+    "In this lab, you will explore and simulate your AI-Readiness Score (AI-R) using a structured, data-driven framework that blends individual capability with market opportunity and alignment. "
+    "The AI-Readiness framework decomposes into: (1) Idiosyncratic Readiness ($V^R$), (2) Systematic Opportunity ($H^R$), and (3) a Synergy component that rewards alignment between your skills and market needs."
+)
+st.latex(r" AI\text{-}R_{i,t} = \alpha\, V^R_i(t) + (1-\alpha)\, H^R_i(t) + \beta\, \text{Synergy}\% ")
+st.markdown(
+    "- $V^R$: Individual readiness via AI-Fluency, Domain-Expertise, and Adaptive-Capacity.\n"
+    "- $H^R$: Market opportunity for the selected occupation (AI enhancement, job growth, wage premium, entry accessibility) scaled by growth and regional multipliers.\n"
+    "- $\alpha \in [0,1]$: Weight on individual vs. market factors.\n"
+    "- $\beta \in [0,1]$: Weight on the synergy term (alignment of skills and timing).\n"
 )
 
-# Initialize data and defaults once
-if "data_initialized" not in st.session_state:
-    data_dict = init_data()
-    st.session_state.update(data_dict)
-    # Global tuning defaults
-    st.session_state.setdefault("alpha", 0.6)
-    st.session_state.setdefault("beta", 0.15)
-    st.session_state.setdefault("lambda_val", 0.3)
-    st.session_state.setdefault("gamma_val", 0.2)
-    # Selections
-    default_occ = "Data Analyst with AI Skills"
-    if default_occ in st.session_state["occupational_data_df"]["occupation_name"].values:
-        st.session_state.setdefault("selected_occupation", default_occ)
-    else:
-        st.session_state.setdefault(
-            "selected_occupation",
-            st.session_state["occupational_data_df"]["occupation_name"].iloc[0]
-        )
-    st.session_state.setdefault("calculated", False)
-    st.session_state.setdefault("simulation_done", False)
-    st.session_state["data_initialized"] = True
 
-# Navigation
-page = st.sidebar.selectbox(
-    label="Navigation",
-    options=["Overview & Data", "AI-Readiness Calculator", "Pathway Simulator"],
+def _init_state():
+    if "initialized" in st.session_state:
+        return
+
+    # Synthetic DataFrames (lightweight, for full interactivity)
+    individual_profiles_data = {
+        'user_id': [1], 'prompting_score': [0.75], 'tools_score': [0.6],
+        'understanding_score': [0.8], 'datalit_score': [0.9],
+        'output_quality_with_ai': [90], 'output_quality_without_ai': [60],
+        'time_without_ai': [4], 'time_with_ai': [1], 'errors_caught': [15],
+        'total_ai_errors': [20], 'appropriate_trust_decisions': [25],
+        'total_decisions': [30], 'delta_proficiency': [0.3],
+        'delta_t_hours_invested': [10], 'education_level': ["Master's"],
+        'years_experience': [5], 'portfolio_score': [0.85], 'recognition_score': [0.7],
+        'credentials_score': [0.9], 'cognitive_flexibility': [85],
+        'social_emotional_intelligence': [90], 'strategic_career_management': [75]
+    }
+    st.session_state.individual_profiles_df = pd.DataFrame(individual_profiles_data)
+
+    occupational_data = {
+        'occupation_name': ['Data Analyst with AI Skills', 'AI UX Researcher', 'AI Prompt Engineer', 'Data Scientist', 'Nursing Informatics', 'Medical Coding'],
+        'ai_enhancement_score': [0.8, 0.9, 0.7, 0.95, 0.75, 0.6],
+        'job_growth_rate_g': [0.25, 0.35, 0.4, 0.3, 0.2, 0.15],
+        'ai_skilled_wage': [120000, 130000, 140000, 150000, 110000, 90000],
+        'median_wage': [90000, 95000, 100000, 110000, 85000, 70000],
+        'education_years_required': [4, 4, 4, 4, 4, 2],
+        'experience_years_required': [2, 3, 1, 3, 2, 0],
+        'current_job_postings': [500, 400, 600, 700, 300, 200],
+        'previous_job_postings': [400, 300, 450, 500, 250, 180],
+        'remote_work_factor': [0.6, 0.7, 0.8, 0.5, 0.4, 0.3],
+        'local_demand': [1.2, 1.1, 1.3, 1.4, 1.0, 0.9],
+        'national_avg_demand': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    }
+    st.session_state.occupational_data_df = pd.DataFrame(occupational_data)
+
+    learning_pathways_data = {
+        'pathway_id': [1, 2, 3],
+        'pathway_name': ['Prompt Engineering Fundamentals', 'AI for Financial Analysis', 'Human-AI Collaboration'],
+        'pathway_type': ['AI-Fluency', 'Domain+AI Integration', 'Adaptive Capacity'],
+        'impact_ai_fluency': [0.2, 0.1, 0.05],
+        'impact_domain_expertise': [0.05, 0.2, 0.1],
+        'impact_adaptive_capacity': [0.1, 0.05, 0.2]
+    }
+    st.session_state.learning_pathways_df = pd.DataFrame(learning_pathways_data)
+
+    occupation_required_skills_data = {
+        'occupation_name': ['Data Analyst with AI Skills'] * 3 + ['AI UX Researcher'] * 3,
+        'skill_name': ['Python', 'Data Visualization', 'Machine Learning'] + ['User Research', 'UI Design', 'AI Ethics'],
+        'required_skill_score': [80, 70, 60, 90, 80, 75],
+        'skill_importance': [0.7, 0.8, 0.5, 0.9, 0.7, 0.6]
+    }
+    st.session_state.occupation_required_skills_df = pd.DataFrame(occupation_required_skills_data)
+
+    individual_skills_data = {
+        'user_id': [1] * 3,
+        'skill_name': ['Python', 'Data Visualization', 'Machine Learning'],
+        'individual_skill_score': [70, 60, 40]
+    }
+    st.session_state.individual_skills_df = pd.DataFrame(individual_skills_data)
+
+    st.session_state.selected_occupation_name = 'Data Analyst with AI Skills'
+    st.session_state.max_possible_match = 100.0
+    st.session_state.current_scores = None
+    st.session_state.simulation_results = None
+
+    st.session_state.initialized = True
+
+
+_init_state()
+
+# Sidebar global controls for Navigation and Global Parameters
+page = st.sidebar.selectbox(label="Navigation", options=["Overview & Inputs", "Scores & Insights", "Pathway Simulation"])
+st.sidebar.subheader("Global Parameters")
+st.sidebar.slider(
+    "Weight on Individual Factors (\u03B1)", min_value=0.0, max_value=1.0, value=0.6, step=0.01,
+    help="Weight allocated to individual readiness ($V^R$) vs. market opportunity ($H^R$) in the overall AI-Readiness Score.",
+    key="alpha_weight",
+)
+st.sidebar.slider(
+    "Synergy Coefficient (\u03B2)", min_value=0.0, max_value=1.0, value=0.15, step=0.01,
+    help="Coefficient for the Synergy component, amplifying the AI-Readiness Score when individual readiness aligns with market opportunity.",
+    key="beta_weight",
 )
 
-if page == "Overview & Data":
+# Route to pages
+if page == "Overview & Inputs":
     from application_pages.page1 import run_page1
     run_page1()
-elif page == "AI-Readiness Calculator":
+elif page == "Scores & Insights":
     from application_pages.page2 import run_page2
     run_page2()
-elif page == "Pathway Simulator":
+elif page == "Pathway Simulation":
     from application_pages.page3 import run_page3
     run_page3()
