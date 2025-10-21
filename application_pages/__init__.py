@@ -1,1 +1,2 @@
-# Initialize application_pages package so relative imports work
+# Package initializer for application_pages
+# Ensures relative imports like `from application_pages.core import ...` work
