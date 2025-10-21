@@ -1,10 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from application_pages.core import (
-    compute_all_scores,
-    simulate_pathway_impact,
-)
+from application_pages.core import compute_all_scores, simulate_pathway_impact
 
 
 def _get_selected_occupation_row(occupation_name):
@@ -17,15 +14,17 @@ def _get_selected_occupation_row(occupation_name):
 
 def run_page3():
     st.subheader("Pathway Simulation")
-    st.markdown("Simulate how a learning pathway may change your $V^R$, Synergy, and overall AI-Readiness.")
+    st.markdown("Explore how completing a learning pathway could change your $V^R$, Synergy, and overall AI-Readiness.")
+    st.latex(r" AI\text{-}R_{i,t} = \alpha\, V^R_i(t) + (1-\alpha)\, H^R_i(t) + \beta\, \text{Synergy}\% ")
 
     if st.session_state.get('current_scores', None) is None:
-        st.info("Tip: Compute your baseline first on 'Overview & Inputs'. You can still simulate now; we will derive baseline from current inputs.")
+        st.info("Tip: Compute your baseline first on 'Overview & Inputs'. You can still simulate now; the baseline will be derived from current inputs.")
 
-    # Select pathway
+    # Select pathway and parameters
     lp_df = st.session_state.learning_pathways_df
     pathway_name = st.selectbox("Select Learning Pathway", options=list(lp_df['pathway_name'].values), index=0)
     pathway_row = lp_df[lp_df['pathway_name'] == pathway_name].iloc[0]
+
     completion_score = st.slider("Pathway Completion Score", 0.0, 1.0, 1.0, 0.05, help="Simulate completion extent.")
     mastery_score = st.slider("Pathway Mastery Score", 0.0, 1.0, 1.0, 0.05, help="Simulate mastery depth.")
 
@@ -116,8 +115,10 @@ def run_page3():
         'Current': [baseline['vr_score'], baseline['hr_score'], baseline['synergy_pct'], baseline['ai_r']],
         'Projected': [vr_new_100, hr_100, synergy_new, ai_r_new],
     })
-    fig_comp = px.bar(comp_df.melt(id_vars='Metric', value_vars=['Current', 'Projected'], var_name='State', value_name='Score'),
-                      x='Metric', y='Score', color='State', barmode='group', title='Comparison: Current vs. Projected Scores')
+    fig_comp = px.bar(
+        comp_df.melt(id_vars='Metric', value_vars=['Current', 'Projected'], var_name='State', value_name='Score'),
+        x='Metric', y='Score', color='State', barmode='group', title='Comparison: Current vs. Projected Scores'
+    )
     st.plotly_chart(fig_comp, use_container_width=True)
 
     st.markdown("Projected component values")
